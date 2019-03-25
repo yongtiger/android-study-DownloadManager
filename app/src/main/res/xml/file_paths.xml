@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--Android N 7 (API level 24/25)的安装APK方式二：使用Provider-->
+<resources>
+    <paths>
+        <external-files-path name="download" path="Download"  />
+    </paths>
+</resources>

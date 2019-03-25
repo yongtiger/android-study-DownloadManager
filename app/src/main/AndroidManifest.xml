@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="cc.brainbook.mydownloadmanager">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+    <!-- ///[DownloadManager#DownloadManager.Request.VISIBILITY_HIDDEN] -->
+    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
+
+    <!-- ///[Android O 8.0安装APK权限] -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- [Android 9.0 (API level 28)#http网络请求的问题#Cleartext HTTP traffic not permitted]android:networkSecurityConfig -->
+    <!--https://www.jianshu.com/p/57047a84e559-->
+    <application
+        android:name=".application.MyApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:theme="@style/AppTheme">
+
+        <!--Android N 7 (API level 24/25)的安装APK方式二：使用Provider-->
+        <!--<provider-->
+            <!--android:name="android.support.v4.content.FileProvider"-->
+            <!--android:authorities="${applicationId}.yourname"-->
+            <!--android:grantUriPermissions="true"-->
+            <!--android:exported="false">-->
+            <!--<meta-data-->
+                <!--android:name="android.support.FILE_PROVIDER_PATHS"-->
+                <!--android:resource="@xml/file_paths" />-->
+        <!--</provider>-->
+
+        <service
+            android:name=".DownloadManagerUpgradeService"
+            android:enabled="true"
+            android:exported="true" />
+
+        <!-- 注册全局静态广播接收器 -->
+        <!-- 注意：局部广播接收器（内部类）只能动态注册，无法静态注册！ -->
+        <!-- 当 priority 值为integer 的最大值才时，才是优先级最高的，即  2147483647；当然，“最高”只是限于静态注册 -->
+        <!-- https://blog.csdn.net/etzmico/article/details/7317528 -->
+        <!-- <receiver android:name=".DownloadManagerUpgradeService.DownloadCompleteReceiver" > -->
+        <!-- <intent-filter android:priority="2147483647" > -->
+        <!-- <action android:name="android.provider.Telephony.SMS_RECEIVED" > -->
+        <!-- </action> -->
+        <!-- </intent-filter> -->
+        <!-- </receiver> -->
+
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

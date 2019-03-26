@@ -94,7 +94,6 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (DEBUG) Log.d(TAG, "MainActivity# onRequestPermissionsResult()# requestCode: " + requestCode);
@@ -107,9 +106,9 @@ public class MainActivity extends AppCompatActivity {
                     startUpgradeService(APK_URL, APK_DOWNLOAD_FILE_NAME);
                 } else {
                     ///启动未知应用来源的权限授权页面
-                    ///https://github.com/yjfnypeu/UpdatePlugin/issues/51
-                    Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()));
-                    startActivityForResult(intent, ACTION_MANAGE_UNKNOWN_APP_SOURCES_REQUEST_CODE);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startManagerUnknownAppSourcesActivity();
+                    }
                 }
                 break;
             case WRITE_EXTERNAL_STORAGE_REQUEST_CODE:
@@ -152,7 +151,18 @@ public class MainActivity extends AppCompatActivity {
 
 
     /**
-     * 跳转到下载管理器（DownloadManage）的设置页面
+     * 启动未知应用来源的权限授权页面
+     *
+     * https://github.com/yjfnypeu/UpdatePlugin/issues/51
+     */
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void startManagerUnknownAppSourcesActivity() {
+        Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()));
+        startActivityForResult(intent, ACTION_MANAGE_UNKNOWN_APP_SOURCES_REQUEST_CODE);
+    }
+
+    /**
+     * 启动下载管理器（DownloadManage）的设置页面
      *
      * https://blog.csdn.net/ayayaay/article/details/43669883
      */

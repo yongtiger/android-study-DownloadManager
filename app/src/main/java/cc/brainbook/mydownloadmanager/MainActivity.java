@@ -3,6 +3,7 @@ package cc.brainbook.mydownloadmanager;
 import android.Manifest;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
+import android.content.ActivityNotFoundException;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -29,6 +30,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int WRITE_EXTERNAL_STORAGE_REQUEST_CODE = 2;
     private static final int ACTION_MANAGE_UNKNOWN_APP_SOURCES_REQUEST_CODE = 1;
     private static final int ACTION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE = 2;
+    private static final int ACTION_DOWNLOAD_MANAGE_SETTINGS_REQUEST_CODE = 3;
 
     private static final String APK_URL = "http://ljdy.tv/app/ljdy.apk";
     private static final String APK_DOWNLOAD_FILE_NAME = "demo.apk";
@@ -37,6 +39,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         if (DEBUG) Log.d(TAG, "MainActivity# onCreate()# ");
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -95,6 +98,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (DEBUG) Log.d(TAG, "MainActivity# onRequestPermissionsResult()# requestCode: " + requestCode);
+
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode) {
             case INSTALL_PACKAGES_REQUEST_CODE:
@@ -124,6 +128,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         if (DEBUG) Log.d(TAG, "MainActivity# onActivityResult()# requestCode: " + requestCode + ", resultCode: " + resultCode);
+
         super.onActivityResult(requestCode, resultCode, data);
         switch (requestCode) {
             case ACTION_MANAGE_UNKNOWN_APP_SOURCES_REQUEST_CODE:
@@ -132,13 +137,38 @@ public class MainActivity extends AppCompatActivity {
                     startUpgradeService(APK_URL, APK_DOWNLOAD_FILE_NAME);
                 }
                 break;
-            case ACTION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE:
-                if (resultCode == RESULT_OK) {
-                    ///启动UpgradeService
-                    startUpgradeService(APK_URL, APK_DOWNLOAD_FILE_NAME);
-                }
+//            case ACTION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE:////??????
+//                if (resultCode == RESULT_OK) {
+//                    ///启动UpgradeService
+//                    startUpgradeService(APK_URL, APK_DOWNLOAD_FILE_NAME);
+//                }
+//                break;
+            case ACTION_DOWNLOAD_MANAGE_SETTINGS_REQUEST_CODE:
+                ///无论是否开启DOWNLOAD_MANAGE，resultCode总为0！
+                // todo ...
                 break;
         }
+    }
+
+
+    /**
+     * 跳转到下载管理器（DownloadManage）的设置页面
+     *
+     * https://blog.csdn.net/ayayaay/article/details/43669883
+     */
+    private void startDownloadManagerSettingsActivity() {
+        String packageName = "com.android.providers.downloads";
+        try {
+            //Open the specific App Info page:
+            Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + packageName));
+            startActivityForResult(intent, ACTION_DOWNLOAD_MANAGE_SETTINGS_REQUEST_CODE);
+        } catch ( ActivityNotFoundException e ) {
+            //Open the generic Apps page:
+            Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS);
+            startActivityForResult(intent, ACTION_DOWNLOAD_MANAGE_SETTINGS_REQUEST_CODE);
+        }
+        Toast.makeText(this, "请开启下载管理器（DownloadManage）！否则无法版本升级", Toast.LENGTH_LONG).show();
     }
 
     /**
@@ -147,9 +177,21 @@ public class MainActivity extends AppCompatActivity {
     private void startUpgradeService(String apkUrl, String apkDownloadFileName) {
         if (DEBUG) Log.d(TAG, "MainActivity# startUpgradeService()# ");
 
-        Intent intent = new Intent(this, DownloadManagerUpgradeService.class);
-        intent.putExtra("apk_url", apkUrl);
-        intent.putExtra("apk_download_file_name", apkDownloadFileName);
-        startService(intent);
+        int state = this.getPackageManager().getApplicationEnabledSetting("com.android.providers.downloads");
+        if(state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                || state==PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+                || state==PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+            // Cannot download using download manager
+            if (DEBUG) Log.d(TAG, "DownloadManagerUpgradeService# startUpgradeService()# Cannot download using download manager");
+
+            ///跳转到下载管理器（DownloadManage）的设置页面
+            startDownloadManagerSettingsActivity();
+        } else {
+            Intent intent = new Intent(this, DownloadManagerUpgradeService.class);
+            intent.putExtra("apk_url", apkUrl);
+            intent.putExtra("apk_download_file_name", apkDownloadFileName);
+            startService(intent);
+        }
     }
+
 }

@@ -36,13 +36,6 @@ public class DownloadManagerUpgradeService extends Service {
      */
     private DownloadManagerReceiver mDownloadManagerReceiver;
 
-    /**
-     * 下载管理器（DownloadManager）为当前的下载请求（Request）分配的唯一的ID
-     *
-     * 可以通过这个ID重新获得该下载任务，进行一些操作或者查询
-     */
-    private long mDownloadReference = -1;
-
     @Override
     public void onCreate() {
         if (DEBUG) Log.d(TAG, "DownloadManagerUpgradeService# onCreate()# ");
@@ -69,26 +62,55 @@ public class DownloadManagerUpgradeService extends Service {
         mApkDownloadFileUri = getDownloadFileUri();
 
 
-//        /* ------------------------ 避免重复下载 ------------------------ */ACTION_DOWNLOAD_COMPLETE = STATUS_SUCCESSFUL or STATUS_FAILED
-//        ///如果当前下载任务ID已经存在，并且状态为STATUS_FAILED或ERROR_UNKNOWN或STATUS_SUCCESSFUL，则删除该下载任务，并且下载任务ID（mDownloadReference）置-1准备重新下载
-//        if (mDownloadReference >= 0 && (DownloadManager.STATUS_SUCCESSFUL == getDownloadStatus(mDownloadReference)
-//                || DownloadManager.STATUS_FAILED == getDownloadStatus(mDownloadReference)
-//                || DownloadManager.ERROR_UNKNOWN == getDownloadStatus(mDownloadReference))
-//        ) {
-//            ///删除下载任务
-//            mDownloadManager.remove(mDownloadReference);
-//
-//            mDownloadReference = -1;
-//        }
-//
-//        ///如果当前下载任务ID不存在，则开始下载任务
-//        if (mDownloadReference == -1) {
-        ///初始化下载管理器（DownloadManager）
-        DownloadManager.Request request = initRequest(mApkUrl, mApkDownloadFileName);
+        /* ------------------------ 避免重复下载 ------------------------ */
+        ///由下载任务的文件路径获取下载ID
+        long downloadReference = getDownloadReference(mApkDownloadFileUri.toString());
 
-        ///将下载请求（Request）加入到下载管理器（DownloadManager）的下载队列
-        mDownloadReference = mDownloadManager.enqueue(request);
-//        }
+        ///注意：只有当前下载任务ID已经存在、并且处于完成状态（ACTION_DOWNLOAD_COMPLETE = STATUS_SUCCESSFUL or STATUS_FAILED）才能重复下载！
+        ///如果重新下载删除该下载任务，并且下载任务ID（downloadReference）置-1准备重新下载
+        if (downloadReference >= 0 && (DownloadManager.STATUS_SUCCESSFUL == getDownloadStatus(downloadReference)
+                || DownloadManager.STATUS_FAILED == getDownloadStatus(downloadReference))
+        ) {
+            ///删除下载任务
+            ///https://blog.csdn.net/qq_29428215/article/details/80570034
+            try {
+                mDownloadManager.remove(downloadReference);
+            } catch (IllegalArgumentException ex) {
+                ex.printStackTrace();
+            }
+
+            downloadReference = -1;
+
+            ///延时处理，以免还未删除就立即重新下载！
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        ///如果当前下载任务ID不存在，则开始下载任务
+        if (downloadReference == -1) {
+            ///删除下载文件
+            File file = new File(mApkDownloadFileUri.toString());
+            if (file.exists()) {
+                if (file.delete());
+
+                ///延时处理，以免还未删除就立即重新下载！
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            ///初始化下载管理器（DownloadManager）
+            DownloadManager.Request request = initRequest(mApkUrl, mApkDownloadFileName);
+
+            ///将下载请求（Request）加入到下载管理器（DownloadManager）的下载队列
+            ///注意：为避免重复下载，不保存downloadReference为成员变量！
+            downloadReference = mDownloadManager.enqueue(request);
+        }
 
         return super.onStartCommand(intent, flags, startId);
     }
@@ -197,32 +219,30 @@ public class DownloadManagerUpgradeService extends Service {
             ///判断是否下载完成的广播
             if (DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) {
                 if (DEBUG) Log.d(TAG, "DownloadManagerUpgradeService# DownloadManagerReceiver# onReceive()# ACTION_DOWNLOAD_COMPLETE: ");
+
                 ///获取刚刚下载完的文件ID
                 long reference = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
-
-                if (reference == mDownloadReference) {
-                    ///安装apk
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        installApk28(mApkDownloadFileUri);
-//                        installApk28(mDownloadManager.getUriForDownloadedFile(mDownloadReference));
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        installApk26(mApkDownloadFileUri);
-//                        installApk26(mDownloadManager.getUriForDownloadedFile(mDownloadReference));
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-                        installApk25(mApkDownloadFileUri);
-//                        installApk25(mDownloadManager.getUriForDownloadedFile(mDownloadReference));
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {///////？？？
-                        installApk24(mApkDownloadFileUri);///////？？？
-//                        installApk24(mDownloadManager.getUriForDownloadedFile(mDownloadReference));///////？？？
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        installApk23(mApkDownloadFileUri);
-                    } else {
-                        installApk0(mApkDownloadFileUri);
-                    }
-
-                    ///停止服务并关闭广播
-                    DownloadManagerUpgradeService.this.stopSelf();
+                ///安装apk
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    installApk28(mApkDownloadFileUri);
+//                        installApk28(mDownloadManager.getUriForDownloadedFile(reference));
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    installApk26(mApkDownloadFileUri);
+//                        installApk26(mDownloadManager.getUriForDownloadedFile(reference));
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+                    installApk25(mApkDownloadFileUri);
+//                        installApk25(mDownloadManager.getUriForDownloadedFile(reference));
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {///////？？？
+                    installApk24(mApkDownloadFileUri);///////？？？
+//                        installApk24(mDownloadManager.getUriForDownloadedFile(reference));///////？？？
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    installApk23(mApkDownloadFileUri);
+                } else {
+                    installApk0(mApkDownloadFileUri);
                 }
+
+                ///停止服务并关闭广播
+                DownloadManagerUpgradeService.this.stopSelf();
 
             } else if (DownloadManager.ACTION_NOTIFICATION_CLICKED.equals(intent.getAction())) {
                 if (DEBUG) Log.d(TAG, "DownloadManagerUpgradeService# DownloadManagerReceiver# onReceive()# ACTION_NOTIFICATION_CLICKED: ");
@@ -230,17 +250,14 @@ public class DownloadManagerUpgradeService extends Service {
                 ///https://blog.csdn.net/sir_zeng/article/details/8983430
                 long[] references = intent.getLongArrayExtra(DownloadManager.EXTRA_NOTIFICATION_CLICK_DOWNLOAD_IDS);
                 for (long reference : references)
-                    if (reference == mDownloadReference) {
-                        if (DownloadManager.STATUS_SUCCESSFUL == getDownloadStatus(reference)) {
-                            ///通知栏点击事件：已经完成下载的任务
-                            Log.d(TAG, "DownloadManagerUpgradeService# DownloadManagerReceiver# onReceive()# 通知栏点击事件：已经完成下载的任务: ");
-                            // todo ...
-                        } else {
-                            ///通知栏点击事件：没有完成下载的任务
-                            Log.d(TAG, "DownloadManagerUpgradeService# DownloadManagerReceiver# onReceive()# 通知栏点击事件：没有完成下载的任务: ");
-                            // todo ...
-                        }
-
+                    if (DownloadManager.STATUS_SUCCESSFUL == getDownloadStatus(reference)) {
+                        ///通知栏点击事件：已经完成下载的任务
+                        Log.d(TAG, "DownloadManagerUpgradeService# DownloadManagerReceiver# onReceive()# 通知栏点击事件：已经完成下载的任务: reference: " + reference);
+                        // todo ...
+                    } else {
+                        ///通知栏点击事件：没有完成下载的任务
+                        Log.d(TAG, "DownloadManagerUpgradeService# DownloadManagerReceiver# onReceive()# 通知栏点击事件：没有完成下载的任务: reference: " + reference);
+                        // todo ...
                     }
             }
         }
@@ -283,7 +300,7 @@ public class DownloadManagerUpgradeService extends Service {
 //        private void installApk23(Uri apkUri) {
 //            if (DEBUG) Log.d(TAG, "DownloadManagerUpgradeService# installApk23()# apkUri: " + apkUri);
 //
-//            String path = getDownloadFileUri(mDownloadReference);
+//            String path = getDownloadFileUri(downloadReference);
 //            Uri downloadFileUri = Uri.parse(path);
 //            Intent intent = new Intent(Intent.ACTION_VIEW);
 //            intent.setDataAndType(downloadFileUri, "application/vnd.android.package-archive");
@@ -450,14 +467,53 @@ public class DownloadManagerUpgradeService extends Service {
     private  String getDownloadFileUri(long downloadReference) {
         DownloadManager.Query query = new DownloadManager.Query();
         query.setFilterById(downloadReference);
-        Cursor cursor = ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).query(query);
-        if(cursor != null) {
-            if (cursor.moveToFirst()) {
-                return cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
+
+        Cursor cursor = null;
+        try {
+            cursor = ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).query(query);
+            if(cursor != null) {
+                if (cursor.moveToFirst()) {
+                    return cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
+                }
             }
-            cursor.close();
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
         }
         return null;
+    }
+
+    /**
+     * 由下载任务的文件路径获取下载ID
+     *
+     * 注意：只返回第一个相同下载任务的文件路径的下载ID！
+     *
+     * @param downloadFileUri 下载任务的文件路径
+     * @return
+     */
+    private  long getDownloadReference(String downloadFileUri) {
+        DownloadManager.Query query = new DownloadManager.Query();
+
+        Cursor cursor = null;
+        try {
+            cursor = ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).query(query);
+            if(cursor != null) {
+                while (cursor.moveToNext()) {
+                    String localUri = cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
+                    long reference =  cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_ID));
+                    if (localUri.equals(downloadFileUri)) {
+                        return reference;
+                    }
+                }
+            }
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+
+        return -1;
     }
 
     /**
@@ -474,13 +530,21 @@ public class DownloadManagerUpgradeService extends Service {
     private int getDownloadStatus(long downloadReference) {
         DownloadManager.Query query = new DownloadManager.Query();
         query.setFilterById(downloadReference);
-        Cursor cursor = ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).query(query);
-        if(cursor != null) {
-            if (cursor.moveToFirst()) {
-                return cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
+
+        Cursor cursor = null;
+        try {
+            cursor = ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).query(query);
+            if(cursor != null) {
+                if (cursor.moveToFirst()) {
+                    return cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
+                }
             }
-            cursor.close();
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
         }
+
         return -1;
     }
 
